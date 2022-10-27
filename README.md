@@ -7,16 +7,16 @@
 
 ## 整体
 
-![Image]([Reflow_table/main.jpg at main · DLABDE/Reflow_table (github.com)](https://github.com/DLABDE/Reflow_table/raw/main/pic/main.jpg))
+<img src="https://github.com/DLABDE/Reflow_table/raw/main/pic/main.jpg" alt="Image" style="zoom:40%;" />
 
 ## 菜单界面
 
-![Image]([Reflow_table/menu.jpg at main · DLABDE/Reflow_table (github.com)](https://github.com/DLABDE/Reflow_table/raw/main/pic/menu.jpg))
+<img src="https://github.com/DLABDE/Reflow_table/raw/main/pic/menu.jpg" alt="Image" style="zoom:20%;" />
 
 ## 信息界面
 
-![Image]([Reflow_table/msg.jpg at main · DLABDE/Reflow_table (github.com)](https://github.com/DLABDE/Reflow_table/raw/main/pic/msg.jpg))
+<img src="https://github.com/DLABDE/Reflow_table/raw/main/pic/msg.jpg" alt="Image" style="zoom:20%;" />
 
 ## 自定义温度
 
-![Image]([Reflow_table/user.jpg at main · DLABDE/Reflow_table (github.com)](https://github.com/DLABDE/Reflow_table/raw/main/pic/user.jpg))
+<img src="https://github.com/DLABDE/Reflow_table/raw/main/pic/user.jpg" alt="Image" style="zoom:20%;" />
