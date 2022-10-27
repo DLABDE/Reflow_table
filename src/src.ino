@@ -11,10 +11,11 @@
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ D7, /* data=*/ D6, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
 
 //定时器
-Ticker tickersec;// 建立一秒定时器
+Ticker tickerone;// 建立定时器
 unsigned int count=1;
 unsigned int face_state = 0;
 unsigned int reflow_time_tag = 0;
+
 
 int flash=0;   //  刷新屏幕
 
@@ -32,6 +33,7 @@ int flash=0;   //  刷新屏幕
 struct system_msg
 {
     float tem;  //温度信息
+    float old_tem;
     float tag;  //目标温度
     int key;    //按键界面状态
     int work;   //工作状态
@@ -69,6 +71,7 @@ void updata_tem()
 	N1 = (myln(Rt25)-myln(Rntc))/B;
 	N2 = 1/298.15 - N1;
 
+    sys_msg.old_tem=sys_msg.tem;
 	sys_msg.tem=1/N2-273.15;
 }
 
@@ -111,6 +114,25 @@ void sys_face()
     u8g2.sendBuffer();
 }
 
+//用户给定界面
+void sys_usertag()
+{
+    int a=sys_msg.key<=10?0:sys_msg.key%10;
+
+    u8g2.setFont(u8g2_font_ncenB10_tr);
+    u8g2.drawStr(40,12,"USER");
+
+    u8g2.setFont(u8g2_font_courB08_tr);
+    u8g2.setCursor(5,30);
+    u8g2.print("tag:"); sys_msg.tag==0?u8g2.print("- -"):u8g2.print(sys_msg.tag);
+    u8g2.setCursor(5,45);
+    u8g2.print("tem:"); u8g2.print(sys_msg.tem);
+    u8g2.setCursor(5,62);
+    u8g2.print("  down   back   up");
+    u8g2.sendBuffer();
+}
+
+
 //菜单界面
 void sys_menu()
 {
@@ -120,11 +142,12 @@ void sys_menu()
     u8g2.drawStr(40,12,"MENU");
 
     u8g2.setFont(u8g2_font_courB08_tr);
-    u8g2.setCursor(8,25);   u8g2.print("cool");
-    u8g2.setCursor(8,35);   u8g2.print("hot");
-    u8g2.setCursor(8,45);   u8g2.print("reflow");
-    u8g2.setCursor(8,55);   u8g2.print("close");
-    u8g2.setCursor(100,25+10*a);   u8g2.print("<");
+    u8g2.setCursor(8,22);   u8g2.print("cool");
+    u8g2.setCursor(8,32);   u8g2.print("hot");
+    u8g2.setCursor(8,42);   u8g2.print("ref");
+    u8g2.setCursor(8,52);   u8g2.print("close");
+    u8g2.setCursor(8,62);   u8g2.print("user");
+    u8g2.setCursor(100,22+10*a);   u8g2.print("<");
     u8g2.sendBuffer();
 }
 
@@ -153,7 +176,7 @@ void setup()
 
     open_face();
 
-    tickersec.attach(1,onesec_tick);
+    tickerone.attach_ms(100,heat_tick);//100ms
     u8g2.clear();
 }
 
@@ -178,7 +201,7 @@ void fa_key_scan()
         }
         if(LOW==digitalRead(KEY3))//向下
         {
-            sys_msg.key=(sys_msg.key<13&&sys_msg.key>9)?sys_msg.key+1:13;
+            sys_msg.key=(sys_msg.key<14&&sys_msg.key>9)?sys_msg.key+1:14;
             face_state=count;  Serial.println("1-down");
         }
         if(LOW==digitalRead(KEY2))//确认
@@ -197,7 +220,7 @@ void fa_key_scan()
             {
                 sys_msg.work=3; //回流焊
                 sys_msg.tag=0;
-                reflow_time_tag=count;
+                reflow_time_tag=count/10;
             }
             if(sys_msg.key%10==3)
             {
@@ -205,12 +228,39 @@ void fa_key_scan()
                 digitalWrite(LED_BUILTIN,HIGH);
                 sys_msg.sec=0;
                 sys_msg.tag=0;
+                sys_msg.key = 0;
+            }
+            if(sys_msg.key%10==4)
+            {
+                sys_msg.key=20;
+                sys_msg.tag=0;
             }
             face_state=count; Serial.println("1-OK");
         }
     }
 
-    if(count-face_state>7)
+    if (page==2)//给定温度界面
+    {
+        sys_msg.work=4;
+        if(LOW==digitalRead(KEY1))//减温
+        {
+            sys_msg.tag-=10;
+        }   
+        if(LOW==digitalRead(KEY2))//返回
+        {
+            sys_msg.key=0;
+            sys_msg.work=0;
+            sys_msg.tag=0;
+        }
+        if(LOW==digitalRead(KEY3))//增温
+        {
+            sys_msg.tag+=10;
+        }
+        if(sys_msg.tag>250)    sys_msg.tag=250;
+        if(sys_msg.tag<30)    sys_msg.tag=30;
+    }
+
+    if((count-face_state)>60 && page!=2)
     {
         sys_msg.key=0;
         face_state=count; 
@@ -223,7 +273,7 @@ int reftime=0;
 int restage=-1;
 void reflow_prg()
 {
-    sys_msg.sec=count-reflow_time_tag;
+    sys_msg.sec=count/10-reflow_time_tag;
 
     //升温阶段
     if(restage==-1)
@@ -256,39 +306,63 @@ void reflow_prg()
     if(restage==2 && sys_msg.tem<50)    {digitalWrite(FAN,LOW);digitalWrite(HOT,LOW);sys_msg.key=13;}
 }
 
+//user-tag-work
+void user_work()
+{
+    if(sys_msg.tag > sys_msg.tem)
+    {
+        //user_tag_time;
+        if((sys_msg.tag - sys_msg.tem >=2.5) && (sys_msg.tem - sys_msg.old_tem <= -0.05))
+        {
+            digitalWrite(HOT,HIGH);digitalWrite(FAN,LOW);//hot
+        }
+        else
+        {
+            digitalWrite(FAN,LOW);digitalWrite(HOT,LOW);//close
+        }
+    }
+    else if(sys_msg.tag < sys_msg.tem)
+    {
+        if(sys_msg.tem - sys_msg.tag >=1)
+        {
+            digitalWrite(HOT,LOW);digitalWrite(FAN,HIGH);//cool
+        }
+        else
+        {
+            digitalWrite(FAN,LOW);digitalWrite(HOT,LOW);//close
+        }
+    }
+}
 
 
-
-#define FACE_PAGE   2
-void (*func_table[FACE_PAGE])() = {sys_face,sys_menu};//指向函数的指针数组
+#define FACE_PAGE   3
+void (*func_table[FACE_PAGE])() = {sys_face,sys_menu,sys_usertag};//指向函数的指针数组
 
 void loop() 
 {
     fa_key_scan();
-    (*func_table[sys_msg.key<10?sys_msg.key:sys_msg.key/10])();
+    (*func_table[sys_msg.key<10?sys_msg.key:sys_msg.key/10])(); //主取十位
     if(flash!=sys_msg.key)  {flash=sys_msg.key; u8g2.clear();}
-    if(count%10==0) u8g2.clear();
+    if(count%100==0) u8g2.clear();
 
     if(sys_msg.work==0) {digitalWrite(FAN,LOW);digitalWrite(HOT,LOW);}  //close
     if(sys_msg.work==1) //cool
     {
         digitalWrite(FAN,HIGH);digitalWrite(HOT,LOW);
-        if(sys_msg.tem<40)    sys_msg.key=13;
+        if(sys_msg.tem<40) {sys_msg.work=0; sys_msg.key=0;}
     }
     if(sys_msg.work==2) {digitalWrite(HOT,HIGH);digitalWrite(FAN,LOW);} //hot
-    if(sys_msg.work==3) reflow_prg();
+    if(sys_msg.work==3) reflow_prg();   //reflow
+    if(sys_msg.work==4) user_work();  //user-tag
 
-    if (count%1==0)//温度信息更新
-    {
-        updata_tem();
-    }
-
+    //if(count%2==0)updata_tem();//温度信息更新
+    updata_tem();//温度信息更新
 }
 
-//定时器(1s)
-void onesec_tick()
+//定时器(100ms)
+void heat_tick()
 {
     count++;
     Serial.println(sys_msg.tem);
-    if(sys_msg.work!=0) digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
+    if(sys_msg.work!=0 && count%10==0) digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
 }
